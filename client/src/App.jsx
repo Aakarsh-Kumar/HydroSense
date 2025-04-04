@@ -101,6 +101,16 @@ const WaterDashboard = () => {
   const togglePump = () => {
     const newState = !isPumpOn;
     setIsPumpOn(newState);
+    fetch('http://192.168.23.239:5000/motor', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ state: newState ? 'ON' : 'OFF' }),
+    })
+      .then((response) => response.json())
+      .then((data) => console.log('Pump state updated:', data))
+      .catch((error) => console.error('Error updating pump state:', error));
     showNotificationMessage(`Pump turned ${newState ? 'ON' : 'OFF'}`);
   };
 
