@@ -54,14 +54,11 @@ def get_data():
 def control_motor():
     global motor_status
     data = request.json
+    print(data,"*****************************************")
     state = data.get("state", "OFF") 
     motor_status["state"] = state
 
-    try:
-        requests.post("http://<ESP8266_IP>/motor", json={"state": state})  
-    except:
-        print("ESP not responding")
-    
+
     return jsonify({"message": f"Motor turned {state}"}), 200
 
 @app.route('/motor-status', methods=['GET'])
