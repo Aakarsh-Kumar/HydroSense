@@ -4,6 +4,8 @@ from statsmodels.tsa.arima.model import ARIMA
 from sklearn.ensemble import IsolationForest
 from prophet import Prophet
 import os
+import warnings
+warnings.filterwarnings("ignore")
 
 class SmartWaterManagement:
     def __init__(self, csv_path="water_usage_data.csv"):
@@ -18,13 +20,6 @@ class SmartWaterManagement:
             df = df[~df.index.duplicated(keep='last')].sort_index()
             df["water_usage"].fillna(method="ffill", inplace=True)
             df["water_usage"].fillna(df["water_usage"].mean(), inplace=True)
-        else:
-            np.random.seed(42)
-            timestamps = pd.date_range(start="2025-04-01", periods=7*24, freq="H")
-            water_usage = np.random.normal(loc=10, scale=2, size=len(timestamps))
-            df = pd.DataFrame({"timestamp": timestamps, "water_usage": water_usage})
-            df.set_index("timestamp", inplace=True)
-            df.to_csv(self.csv_path)
         return df
 
     def train_models(self):
@@ -72,7 +67,7 @@ class SmartWaterManagement:
             "live_flow_rate": live_flow_rate,
             "expected_usage": expected_usage,
             "leak_status": leak_status,
-            "leak_probability": f"{leak_probability}%",
+            "leak_probability": leak_probability,
         }
     
     def predict_weekly_usage(self):
@@ -86,11 +81,10 @@ class SmartWaterManagement:
             "last_week_usage": last_week_usage.to_dict(orient="records")
         }
 
-# Example Usage
 if __name__ == "__main__":
     smart_water_system = SmartWaterManagement()
-    live_flow_rate = 11
-    total_water_usage = 10
+    live_flow_rate = 20.2
+    total_water_usage = 0
     result = smart_water_system.detect_leak(live_flow_rate, total_water_usage)
     print(result)
     

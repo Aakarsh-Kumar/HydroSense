@@ -5,14 +5,14 @@ from model import SmartWaterManagement as SWM
 swm= SWM()
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=["*"])
 
 water_data = {
     "flow_rate": 0,
     "total_usage": 0,
     "status": "OFF",
     "potential_leak": False,
-    "leak_probability": 0.0
+    "leak_probability": "2.26"
 }
 
 motor_status = {"state": "OFF"}
@@ -31,14 +31,23 @@ def update_data():
         live_flow_rate=water_data["flow_rate"],
         total_water_usage=water_data["total_usage"]
     )
-
+    print(result)
     water_data["potential_leak"] = result["leak_status"]
-    water_data["leak_probability"] = result["leak_probability"]
+    water_data["leak_probability"] = float(result["leak_probability"])
+    if result["leak_status"] == "Leak Detected":
+        motor_status["state"] = "OFF"
 
     return jsonify({"message": "Data received and processed!"}), 200
 
+@app.route('/predict', methods=['GET'])
+def predict_usage():
+    smart_water_system = SWM()
+    prediction = smart_water_system.predict_weekly_usage()
+    return jsonify(prediction)
+
 @app.route('/data', methods=['GET'])
 def get_data():
+    print(water_data,"==================================================================")
     return jsonify(water_data)
 
 @app.route('/motor', methods=['POST'])
