@@ -6,24 +6,20 @@
 
 #define SERVER_URL "http://192.168.23.239:5000"
 
-// Flow Sensor & Relay
-#define FLOW_SENSOR_PIN 4  // D2
-#define RELAY_PIN 5        // D1
+#define FLOW_SENSOR_PIN 4  
+#define RELAY_PIN 5     
 
 volatile int pulseCount = 0;
 float flowRate = 0.0, totalUsage = 0.0;
 unsigned long lastTime = 0;
 unsigned long lastTotalTime= 0;
 WiFiClient client;
-// Interrupt function to count pulses from the flow sensor
 void IRAM_ATTR pulseCounter() {
     pulseCount++;
 }
 
 void setup() {
     Serial.begin(115200);
-    
-    // Connect to Wi-Fi
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     Serial.print("Connecting to Wi-Fi...");
     while (WiFi.status() != WL_CONNECTED) {
@@ -39,7 +35,7 @@ void setup() {
 }
 
 float calculateFlowRate() {
-    float flow = (pulseCount / 8.5); 
+    float flow = (pulseCount / 7.5); 
     pulseCount = 0;
     return flow;
 }
@@ -76,9 +72,9 @@ void getMotorStatus() {
             Serial.println(response);
 
             if (response.indexOf("\"state\": \"ON\"") != -1) {
-                digitalWrite(RELAY_PIN, HIGH);
-            } else {
                 digitalWrite(RELAY_PIN, LOW);
+            } else {
+                digitalWrite(RELAY_PIN, HIGH);
             }
         } else {
             Serial.print("Failed to get motor status! Error: ");
