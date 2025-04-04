@@ -5,16 +5,17 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Droplet, Moon, Sun, AlertTriangle, CheckCircle, Power, Activity, ArrowDown, ArrowUp } from 'lucide-react';
 
 const generatePastUsageData = () => {
-  const days = ["00:00","01:00","02:00","03:00","04:00","05:00","06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00"];
+  const days = ["00:00", "01:00", "02:00", "03:00", "04:00", "05:00", "06:00", "07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00", "22:00", "23:00"];
   return days.map((day, index) => {
     const baseValue = 10 + Math.random() * 5;
     return {
-      name: day,
+      name: index % 2 === 0 ? day : "",
       usage: Math.round(baseValue),
       average: 11,
     };
   });
 };
+
 
 const generateFutureUsageData = () => {
   const nextWeek = ['Next Mon', 'Next Tue', 'Next Wed', 'Next Thu', 'Next Fri', 'Next Sat', 'Next Sun'];
@@ -134,7 +135,7 @@ const WaterDashboard = () => {
           <div className="flex items-center space-x-2">
             <Droplet className="text-blue-500" size={28} />
             <h1 className="text-xl font-bold bg-gradient-to-r from-blue-500 to-teal-400 bg-clip-text text-transparent">
-              Water Management Dashboard
+              HydroSense
             </h1>
           </div>
           
@@ -387,30 +388,7 @@ const WaterDashboard = () => {
                 )}
               </AnimatePresence>
               
-              <div className="mt-4">
-                <div className="flex justify-between mb-1 text-sm">
-                  <span>Leak Probability</span>
-                  <span className={`font-medium ${
-                    leakProbability > 70 ? 'text-red-500' : 
-                    leakProbability > 30 ? 'text-yellow-500' : 'text-green-500'
-                  }`}>
-                    {leakProbability}%
-                  </span>
-                </div>
-                <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <motion.div 
-                    className={`h-full rounded-full ${
-                      leakProbability > 70 ? 'bg-red-500' : 
-                      leakProbability > 30 ? 'bg-yellow-500' : 'bg-green-500'
-                    }`}
-                    initial={{ width: '0%' }}
-                    animate={{ width: `${leakProbability}%` }}
-                    transition={{ duration: 0.5 }}
-                  />
-                </div>
-              </div>
-              
-              <div className="mt-6">
+              <div className="mt-14">
                 <h3 className="text-sm font-medium mb-2">AI Analysis</h3>
                 <p className="text-sm text-gray-500 mb-1">Last analysis: Just now</p>
                 <p className="text-sm">
