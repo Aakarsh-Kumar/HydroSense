@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import './App.css';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar } from 'recharts';
-import { Droplet, Moon, Sun, AlertTriangle, CheckCircle, Power, Activity, ArrowDown, ArrowUp } from 'lucide-react';
+import { Droplet, Moon, Sun, AlertTriangle, CheckCircle, Power, Activity} from 'lucide-react';
 
 const generatePastUsageData = () => {
   const days = ["00:00", "01:00", "02:00", "03:00", "04:00", "05:00", "06:00", "07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00", "22:00", "23:00"];
@@ -80,7 +80,7 @@ const WaterDashboard = () => {
         setLeakProbability(Math.min(100, Math.round(probability)));
         if (probability > 70 && !showLeakAlert) {
           setShowLeakAlert(true);
-          showNotificationMessage('⚠️ Potential leak detected! Check system or shut off pump.', 6000);
+          showNotificationMessage(' Potential leak detected! Check system or shut off pump.', 6000);
         } else if (probability < 30 && showLeakAlert) {
           setShowLeakAlert(false);
         }
@@ -447,7 +447,7 @@ const WaterDashboard = () => {
                     <Line 
                       type="monotone" 
                       dataKey="average" 
-                      name="Weekly Average" 
+                      name="Daily Average" 
                       stroke="#9CA3AF" 
                       strokeDasharray="3 3" 
                       strokeWidth={2} 
@@ -458,7 +458,7 @@ const WaterDashboard = () => {
               </div>
               
               <div className="text-center text-sm text-gray-500 mt-2">
-                Past 7 days water consumption
+                Past 24 hours water consumption
               </div>
             </div>
           </motion.div>
