@@ -16,17 +16,20 @@ const generatePastUsageData = () => {
   });
 };
 
-const generateFutureUsageData = () => {
-  const nextWeek = ['Next Mon', 'Next Tue', 'Next Wed', 'Next Thu', 'Next Fri', 'Next Sat', 'Next Sun'];
-  return nextWeek.map((day, index) => {
-    const baseValue = 130 + Math.random() * 70;
-    const prediction = Math.round(baseValue);
-    return {
-      name: day,
-      prediction: prediction,
-      threshold: prediction > 170 ? prediction : null,
-    };
-  });
+const generateFutureUsageData = async() => {
+    try {
+      const response = await fetch('http://192.168.23.239:5000/predict'); 
+      const data = await response.json();
+      const formattedData = data.predicted_next_week.map((item) => ({
+        name: new Date(item.date).toLocaleDateString('en-US', { weekday: 'short' }),
+        prediction: Math.round(item.predicted_water_usage),
+        threshold: item.predicted_water_usage > 170 ? Math.round(item.predicted_water_usage) : null
+      }));
+      console.log(formattedData);
+      return formattedData;
+    } catch (error) {
+      console.error('Error fetching future usage data:', error);
+    }
 };
 
 const useFlowRate = (isPumpOn) => {
@@ -38,7 +41,7 @@ const useFlowRate = (isPumpOn) => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch('http://192.168.23.239:5000/data'); // Replace with your backend endpoint
+        const response = await fetch('http://192.168.23.239:5000/data');
         const data = await response.json();
         setFlowRate(data.flow_rate);
         setTotalUsage(data.total_usage);
@@ -67,7 +70,7 @@ const WaterDashboard = () => {
   const [isPumpOn, setIsPumpOn] = useState(false);
   const [showLeakAlert, setShowLeakAlert] = useState(false);
   const [pastUsageData, setPastUsageData] = useState(generatePastUsageData());
-  const [futureUsageData, setFutureUsageData] = useState(generateFutureUsageData());
+  const [futureUsageData, setFutureUsageData] = useState([]);
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
 
@@ -81,6 +84,13 @@ const WaterDashboard = () => {
       setShowLeakAlert(false);
     }
   }, [leakProbability, showLeakAlert]);
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      const data = await generateFutureUsageData();
+      setFutureUsageData(data || []);
+    };
+    fetchInitialData();
+  }, []);
 
   const showNotificationMessage = (message, duration = 3000) => {
     setNotificationMessage(message);
@@ -112,9 +122,18 @@ const WaterDashboard = () => {
     setPastUsageData(generatePastUsageData());
   };
 
-  const refreshFutureUsageData = () => {
-    setFutureUsageData(generateFutureUsageData());
+  const refreshFutureUsageData = async () => {
+    console.log("Refreshing future usage data...");
+    try {
+      const data = await generateFutureUsageData();
+      console.log("Fetched data:", data);
+      setFutureUsageData(data || []);
+      console.log("Future usage data refreshed.");
+    } catch (error) {
+      console.error("Error refreshing data:", error);
+    }
   };
+  
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-800'}`}>
@@ -270,7 +289,7 @@ const WaterDashboard = () => {
                 </div>
 
                 <div className="text-center">
-                  <p className="text-sm text-gray-500 mb-1">Status</p>
+                  <p className="text-sm text-gray-500 mb-2">Status</p>
                   <div className="flex items-center justify-center">
                     <motion.div
                       animate={isPumpOn ? {
@@ -289,15 +308,6 @@ const WaterDashboard = () => {
                       {isPumpOn ? 'ACTIVE' : 'INACTIVE'}
                     </span>
                   </div>
-                </div>
-
-                <div className="flex justify-center items-center mt-4">
-                  <button
-                    onClick={() => showNotificationMessage('Simulated leak toggled')}
-                    className="text-xs px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
-                  >
-                    Simulate Leak
-                  </button>
                 </div>
               </div>
             </div>
@@ -399,12 +409,12 @@ const WaterDashboard = () => {
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-semibold">Usage History</h2>
-                <button
+                {/* <button
                   onClick={refreshPastUsageData}
                   className="text-xs px-3 py-1 rounded bg-blue-500 hover:bg-blue-600 text-white"
                 >
                   Refresh Data
-                </button>
+                </button> */}
               </div>
 
               <div className="h-72">
@@ -486,12 +496,7 @@ const WaterDashboard = () => {
                         fill="url(#blue-gradient-bar)"
                         radius={[4, 4, 0, 0]}
                       />
-                      <Bar
-                        dataKey="threshold"
-                        name="High Usage Alert"
-                        fill="#EF4444"
-                        radius={[4, 4, 0, 0]}
-                      />
+                      
                       <defs>
                         <linearGradient id="blue-gradient-bar" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="#3B82F6" />
