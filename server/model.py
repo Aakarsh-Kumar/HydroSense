@@ -18,13 +18,6 @@ class SmartWaterManagement:
             df = df[~df.index.duplicated(keep='last')].sort_index()
             df["water_usage"].fillna(method="ffill", inplace=True)
             df["water_usage"].fillna(df["water_usage"].mean(), inplace=True)
-        else:
-            np.random.seed(42)
-            timestamps = pd.date_range(start="2025-04-01", periods=7*24, freq="H")
-            water_usage = np.random.normal(loc=10, scale=2, size=len(timestamps))
-            df = pd.DataFrame({"timestamp": timestamps, "water_usage": water_usage})
-            df.set_index("timestamp", inplace=True)
-            df.to_csv(self.csv_path)
         return df
 
     def train_models(self):
