@@ -74,7 +74,7 @@ class SmartWaterManagement:
             "leak_probability": f"{leak_probability}%",
         }
 smart_water_system = SmartWaterManagement()
-live_flow_rate = 13 
+live_flow_rate = 11 
 total_water_usage = 10
 
 result = smart_water_system.detect_leak(live_flow_rate, total_water_usage)
