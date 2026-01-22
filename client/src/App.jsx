@@ -1,11 +1,55 @@
-import React, { useState, useEffect } from 'react';
-import './App.css';
-import { motion, AnimatePresence } from 'framer-motion';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar } from 'recharts';
-import { Droplet, Moon, Sun, AlertTriangle, CheckCircle, Power, Activity } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import "./App.css";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+  BarChart,
+  Bar,
+} from "recharts";
+import {
+  Droplet,
+  Moon,
+  Sun,
+  AlertTriangle,
+  CheckCircle,
+  Power,
+  Activity,
+} from "lucide-react";
 
 const generatePastUsageData = () => {
-  const days = ["00:00", "01:00", "02:00", "03:00", "04:00", "05:00", "06:00", "07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00", "22:00", "23:00"];
+  const days = [
+    "00:00",
+    "01:00",
+    "02:00",
+    "03:00",
+    "04:00",
+    "05:00",
+    "06:00",
+    "07:00",
+    "08:00",
+    "09:00",
+    "10:00",
+    "11:00",
+    "12:00",
+    "13:00",
+    "14:00",
+    "15:00",
+    "16:00",
+    "17:00",
+    "18:00",
+    "19:00",
+    "20:00",
+    "21:00",
+    "22:00",
+    "23:00",
+  ];
   return days.map((day, index) => {
     const baseValue = 10 + Math.random() * 5;
     return {
@@ -16,53 +60,57 @@ const generatePastUsageData = () => {
   });
 };
 
-const generateFutureUsageData = async() => {
-    try {
-      const response = await fetch('http://192.168.23.239:5000/predict'); 
-      const data = await response.json();
-      const formattedData = data.predicted_next_week.map((item) => ({
-        name: new Date(item.date).toLocaleDateString('en-US', { weekday: 'short' }),
-        prediction: Math.round(item.predicted_water_usage),
-        threshold: item.predicted_water_usage > 170 ? Math.round(item.predicted_water_usage) : null
-      }));
-      console.log(formattedData);
-      return formattedData;
-    } catch (error) {
-      console.error('Error fetching future usage data:', error);
-    }
+const generateFutureUsageData = async () => {
+  try {
+    const response = await fetch("http://172.31.3.239:5000/predict");
+    const data = await response.json();
+    const formattedData = data.predicted_next_week.map((item) => ({
+      name: new Date(item.date).toLocaleDateString("en-US", {
+        weekday: "short",
+      }),
+      prediction: Math.round(item.predicted_water_usage),
+      threshold:
+        item.predicted_water_usage > 170
+          ? Math.round(item.predicted_water_usage)
+          : null,
+    }));
+    console.log(formattedData);
+    return formattedData;
+  } catch (error) {
+    console.error("Error fetching future usage data:", error);
+  }
 };
 
 const useFlowRate = (isPumpOn) => {
   const [flowRate, setFlowRate] = useState(0);
   const [totalUsage, setTotalUsage] = useState(0);
   const [leakProbability, setLeakProbability] = useState(0);
-  const [leakStatus, setLeakStatus] = useState('Normal');
+  const [leakStatus, setLeakStatus] = useState("Normal");
+  const [motorState, setMotorState] = useState("OFF");
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch('http://192.168.23.239:5000/data');
+        const response = await fetch("http://172.31.3.239:5000/data");
         const data = await response.json();
         setFlowRate(data.flow_rate);
         setTotalUsage(data.total_usage);
         setLeakProbability(data.leak_probability);
         setLeakStatus(data.potential_leak);
+        setMotorState(data.motor_state || "OFF");
       } catch (error) {
-        console.error('Error fetching water data:', error);
+        console.error("Error fetching water data:", error);
       }
     };
 
-    if (isPumpOn) {
-      const interval = setInterval(fetchData, 3000); // Fetch data every 3 seconds
-      return () => clearInterval(interval);
-    } else {
-      setFlowRate(0);
-      setLeakProbability(0);
-      setLeakStatus('Normal');
-    }
+    // Always poll data to detect auto-shutdown, but more frequently when pump is on
+    const interval = setInterval(fetchData, isPumpOn ? 2000 : 3000);
+    fetchData(); // Initial fetch
+
+    return () => clearInterval(interval);
   }, [isPumpOn]);
 
-  return { flowRate, totalUsage, leakProbability, leakStatus };
+  return { flowRate, totalUsage, leakProbability, leakStatus, motorState };
 };
 
 const WaterDashboard = () => {
@@ -72,14 +120,30 @@ const WaterDashboard = () => {
   const [pastUsageData, setPastUsageData] = useState(generatePastUsageData());
   const [futureUsageData, setFutureUsageData] = useState([]);
   const [showNotification, setShowNotification] = useState(false);
-  const [notificationMessage, setNotificationMessage] = useState('');
+  const [notificationMessage, setNotificationMessage] = useState("");
 
-  const { flowRate, totalUsage, leakProbability, leakStatus } = useFlowRate(isPumpOn);
+  const { flowRate, totalUsage, leakProbability, leakStatus, motorState } =
+    useFlowRate(isPumpOn);
+
+  // Sync isPumpOn with backend motor state
+  useEffect(() => {
+    const backendState = motorState === "ON";
+    if (isPumpOn !== backendState) {
+      setIsPumpOn(backendState);
+      if (!backendState && isPumpOn) {
+        // Auto shutdown detected
+        showNotificationMessage("⚠️ Auto Emergency Shutdown Activated!", 5000);
+      }
+    }
+  }, [motorState]);
 
   useEffect(() => {
     if (leakProbability > 70 && !showLeakAlert) {
       setShowLeakAlert(true);
-      showNotificationMessage('Potential leak detected! Check system or shut off pump.', 6000);
+      showNotificationMessage(
+        "Potential leak detected! Check system or shut off pump.",
+        6000,
+      );
     } else if (leakProbability < 30 && showLeakAlert) {
       setShowLeakAlert(false);
     }
@@ -101,23 +165,23 @@ const WaterDashboard = () => {
   const togglePump = () => {
     const newState = !isPumpOn;
     setIsPumpOn(newState);
-    fetch('http://192.168.23.239:5000/motor', {
-      method: 'POST',
+    fetch("http://172.31.3.239:5000/motor", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify({ state: newState ? 'ON' : 'OFF' }),
+      body: JSON.stringify({ state: newState ? "ON" : "OFF" }),
     })
       .then((response) => response.json())
-      .then((data) => console.log('Pump state updated:', data))
-      .catch((error) => console.error('Error updating pump state:', error));
-    showNotificationMessage(`Pump turned ${newState ? 'ON' : 'OFF'}`);
+      .then((data) => console.log("Pump state updated:", data))
+      .catch((error) => console.error("Error updating pump state:", error));
+    showNotificationMessage(`Pump turned ${newState ? "ON" : "OFF"}`);
   };
 
   const emergencyShutOff = () => {
     setIsPumpOn(false);
     setShowLeakAlert(false);
-    showNotificationMessage('Emergency shut-off activated. Pump is now OFF.');
+    showNotificationMessage("Emergency shut-off activated. Pump is now OFF.");
   };
 
   const calculateFlowPercentage = () => {
@@ -126,7 +190,7 @@ const WaterDashboard = () => {
 
   const calculateLeakPercentage = () => {
     return leakProbability;
-  }
+  };
 
   const refreshPastUsageData = () => {
     setPastUsageData(generatePastUsageData());
@@ -143,11 +207,14 @@ const WaterDashboard = () => {
       console.error("Error refreshing data:", error);
     }
   };
-  
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-800'}`}>
-      <nav className={`p-4 ${darkMode ? 'bg-gray-800' : 'bg-white'} shadow-md backdrop-blur-lg bg-opacity-90`}>
+    <div
+      className={`min-h-screen transition-colors duration-300 ${darkMode ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-800"}`}
+    >
+      <nav
+        className={`p-4 ${darkMode ? "bg-gray-800" : "bg-white"} shadow-md backdrop-blur-lg bg-opacity-90`}
+      >
         <div className="container mx-auto flex justify-between items-center">
           <div className="flex items-center space-x-2">
             <Droplet className="text-blue-500" size={28} />
@@ -174,7 +241,7 @@ const WaterDashboard = () => {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => setDarkMode(!darkMode)}
-              className={`p-2 rounded-full ${darkMode ? 'bg-gray-700 text-yellow-300' : 'bg-gray-200 text-gray-700'}`}
+              className={`p-2 rounded-full ${darkMode ? "bg-gray-700 text-yellow-300" : "bg-gray-200 text-gray-700"}`}
             >
               {darkMode ? <Sun size={20} /> : <Moon size={20} />}
             </motion.button>
@@ -188,7 +255,7 @@ const WaterDashboard = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className={`rounded-xl shadow-lg overflow-hidden ${darkMode ? 'bg-gray-800 bg-opacity-70' : 'bg-white'} backdrop-blur-lg`}
+            className={`rounded-xl shadow-lg overflow-hidden ${darkMode ? "bg-gray-800 bg-opacity-70" : "bg-white"} backdrop-blur-lg`}
           >
             <div className="p-6">
               <h2 className="text-lg font-semibold mb-4 flex items-center">
@@ -205,7 +272,8 @@ const WaterDashboard = () => {
                     animate={{ opacity: 1, scale: 1 }}
                     className="text-3xl font-bold"
                   >
-                    {flowRate} <span className="text-lg font-normal">L/min</span>
+                    {flowRate}{" "}
+                    <span className="text-lg font-normal">L/min</span>
                   </motion.p>
                 </div>
                 <div>
@@ -240,13 +308,21 @@ const WaterDashboard = () => {
                     strokeWidth="10"
                     strokeLinecap="round"
                     strokeDasharray={`${2 * Math.PI * 45}`}
-                    strokeDashoffset={`${2 * Math.PI * 45 * (1 - calculateFlowPercentage()/100 )}`}
+                    strokeDashoffset={`${2 * Math.PI * 45 * (1 - calculateFlowPercentage() / 100)}`}
                     initial={{ strokeDashoffset: `${2 * Math.PI * 45}` }}
-                    animate={{ strokeDashoffset: `${2 * Math.PI * 45 * (1 - calculateFlowPercentage()/100)}` }}
+                    animate={{
+                      strokeDashoffset: `${2 * Math.PI * 45 * (1 - calculateFlowPercentage() / 100)}`,
+                    }}
                     transition={{ duration: 0.5 }}
                   />
                   <defs>
-                    <linearGradient id="blue-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <linearGradient
+                      id="blue-gradient"
+                      x1="0%"
+                      y1="0%"
+                      x2="100%"
+                      y2="100%"
+                    >
                       <stop offset="0%" stopColor="#3B82F6" />
                       <stop offset="100%" stopColor="#10B981" />
                     </linearGradient>
@@ -274,7 +350,7 @@ const WaterDashboard = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className={`rounded-xl shadow-lg overflow-hidden ${darkMode ? 'bg-gray-800 bg-opacity-70' : 'bg-white'} backdrop-blur-lg`}
+            className={`rounded-xl shadow-lg overflow-hidden ${darkMode ? "bg-gray-800 bg-opacity-70" : "bg-white"} backdrop-blur-lg`}
           >
             <div className="p-6">
               <h2 className="text-lg font-semibold mb-4 flex items-center">
@@ -290,8 +366,8 @@ const WaterDashboard = () => {
                     onClick={togglePump}
                     className={`w-24 h-24 rounded-full flex items-center justify-center shadow-lg ${
                       isPumpOn
-                        ? 'bg-gradient-to-r from-blue-500 to-teal-400 text-white'
-                        : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+                        ? "bg-gradient-to-r from-blue-500 to-teal-400 text-white"
+                        : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
                     }`}
                   >
                     <Power size={32} />
@@ -302,20 +378,28 @@ const WaterDashboard = () => {
                   <p className="text-sm text-gray-500 mb-2">Status</p>
                   <div className="flex items-center justify-center">
                     <motion.div
-                      animate={isPumpOn ? {
-                        scale: [1, 1.2, 1],
-                        opacity: [0.7, 1, 0.7]
-                      } : { scale: 1, opacity: 0.5 }}
-                      transition={isPumpOn ? {
-                        repeat: Infinity,
-                        duration: 1.5
-                      } : {}}
+                      animate={
+                        isPumpOn
+                          ? {
+                              scale: [1, 1.2, 1],
+                              opacity: [0.7, 1, 0.7],
+                            }
+                          : { scale: 1, opacity: 0.5 }
+                      }
+                      transition={
+                        isPumpOn
+                          ? {
+                              repeat: Infinity,
+                              duration: 1.5,
+                            }
+                          : {}
+                      }
                       className={`w-3 h-3 rounded-full mr-2 ${
-                        isPumpOn ? 'bg-green-500' : 'bg-gray-400'
+                        isPumpOn ? "bg-green-500" : "bg-gray-400"
                       }`}
                     />
                     <span className="font-medium">
-                      {isPumpOn ? 'ACTIVE' : 'INACTIVE'}
+                      {isPumpOn ? "ACTIVE" : "INACTIVE"}
                     </span>
                   </div>
                 </div>
@@ -327,11 +411,13 @@ const WaterDashboard = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className={`rounded-xl shadow-lg overflow-hidden ${darkMode ? 'bg-gray-800 bg-opacity-70' : 'bg-white'} backdrop-blur-lg`}
+            className={`rounded-xl shadow-lg overflow-hidden ${darkMode ? "bg-gray-800 bg-opacity-70" : "bg-white"} backdrop-blur-lg`}
           >
             <div className="p-6">
               <h2 className="text-lg font-semibold mb-4 flex items-center">
-                <AlertTriangle className={`mr-2 ${showLeakAlert ? 'text-red-500' : 'text-blue-500'}`} />
+                <AlertTriangle
+                  className={`mr-2 ${showLeakAlert ? "text-red-500" : "text-blue-500"}`}
+                />
                 Leak Detection
               </h2>
 
@@ -348,19 +434,25 @@ const WaterDashboard = () => {
                       <motion.div
                         animate={{
                           scale: [1, 1.2, 1],
-                          opacity: [0.7, 1, 0.7]
+                          opacity: [0.7, 1, 0.7],
                         }}
                         transition={{
                           repeat: Infinity,
-                          duration: 1
+                          duration: 1,
                         }}
                       >
-                        <AlertTriangle className="text-red-500 mr-3" size={24} />
+                        <AlertTriangle
+                          className="text-red-500 mr-3"
+                          size={24}
+                        />
                       </motion.div>
                       <div>
-                        <h3 className="font-bold text-red-700 dark:text-red-400">Potential Leak Detected!</h3>
+                        <h3 className="font-bold text-red-700 dark:text-red-400">
+                          Potential Leak Detected!
+                        </h3>
                         <p className="text-sm text-red-600 dark:text-red-300 mt-1">
-                          Abnormal flow rate detected. Please check system or take action.
+                          Abnormal flow rate detected. Please check system or
+                          take action.
                         </p>
                         <motion.button
                           whileHover={{ scale: 1.05 }}
@@ -384,7 +476,9 @@ const WaterDashboard = () => {
                     <div className="flex items-center">
                       <CheckCircle className="text-green-500 mr-3" size={24} />
                       <div>
-                        <h3 className="font-bold text-green-700 dark:text-green-400">No Leaks Detected</h3>
+                        <h3 className="font-bold text-green-700 dark:text-green-400">
+                          No Leaks Detected
+                        </h3>
                         <p className="text-sm text-green-600 dark:text-green-300 mt-1">
                           System is operating normally
                         </p>
@@ -396,15 +490,17 @@ const WaterDashboard = () => {
 
               <div className="mt-14">
                 <h3 className="text-sm font-medium mb-2">AI Analysis</h3>
-                <p className="text-sm text-gray-500 mb-1">Last analysis: Just now</p>
+                <p className="text-sm text-gray-500 mb-1">
+                  Last analysis: Just now
+                </p>
                 <p className="text-sm">
-                  {isPumpOn ? (
-                    leakProbability > 70 ?
-                      "Abnormal flow pattern detected - immediate inspection recommended." :
-                      leakProbability > 30 ?
-                        "Flow patterns show some irregularities - monitoring closely." :
-                        "Water flow pattern is within normal parameters."
-                  ) : "Pump is currently off. No flow to analyze."}
+                  {isPumpOn
+                    ? leakProbability > 70
+                      ? "Abnormal flow pattern detected - immediate inspection recommended."
+                      : leakProbability > 30
+                        ? "Flow patterns show some irregularities - monitoring closely."
+                        : "Water flow pattern is within normal parameters."
+                    : "Pump is currently off. No flow to analyze."}
                 </p>
               </div>
             </div>
@@ -414,7 +510,7 @@ const WaterDashboard = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className={`col-span-1 md:col-span-3 rounded-xl shadow-lg overflow-hidden ${darkMode ? 'bg-gray-800 bg-opacity-70' : 'bg-white'} backdrop-blur-lg`}
+            className={`col-span-1 md:col-span-3 rounded-xl shadow-lg overflow-hidden ${darkMode ? "bg-gray-800 bg-opacity-70" : "bg-white"} backdrop-blur-lg`}
           >
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
@@ -429,15 +525,24 @@ const WaterDashboard = () => {
 
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={pastUsageData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "#374151" : "#E5E7EB"} />
-                    <XAxis dataKey="name" stroke={darkMode ? "#9CA3AF" : "#6B7280"} />
+                  <LineChart
+                    data={pastUsageData}
+                    margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={darkMode ? "#374151" : "#E5E7EB"}
+                    />
+                    <XAxis
+                      dataKey="name"
+                      stroke={darkMode ? "#9CA3AF" : "#6B7280"}
+                    />
                     <YAxis stroke={darkMode ? "#9CA3AF" : "#6B7280"} />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: darkMode ? "#1F2937" : "#FFFFFF",
                         borderColor: darkMode ? "#374151" : "#E5E7EB",
-                        color: darkMode ? "#F9FAFB" : "#111827"
+                        color: darkMode ? "#F9FAFB" : "#111827",
                       }}
                     />
                     <Legend />
@@ -472,11 +577,13 @@ const WaterDashboard = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
-            className={`col-span-1 lg:col-span-3 rounded-xl shadow-lg overflow-hidden ${darkMode ? 'bg-gray-800 bg-opacity-70' : 'bg-white'} backdrop-blur-lg`}
+            className={`col-span-1 lg:col-span-3 rounded-xl shadow-lg overflow-hidden ${darkMode ? "bg-gray-800 bg-opacity-70" : "bg-white"} backdrop-blur-lg`}
           >
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold">AI Predictions & Leak Prevention</h2>
+                <h2 className="text-lg font-semibold">
+                  AI Predictions & Leak Prevention
+                </h2>
                 <button
                   onClick={refreshFutureUsageData}
                   className="text-xs px-3 py-1 rounded bg-blue-500 hover:bg-blue-600 text-white"
@@ -488,15 +595,24 @@ const WaterDashboard = () => {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-3 h-72">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={futureUsageData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "#374151" : "#E5E7EB"} />
-                      <XAxis dataKey="name" stroke={darkMode ? "#9CA3AF" : "#6B7280"} />
+                    <BarChart
+                      data={futureUsageData}
+                      margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke={darkMode ? "#374151" : "#E5E7EB"}
+                      />
+                      <XAxis
+                        dataKey="name"
+                        stroke={darkMode ? "#9CA3AF" : "#6B7280"}
+                      />
                       <YAxis stroke={darkMode ? "#9CA3AF" : "#6B7280"} />
                       <Tooltip
                         contentStyle={{
                           backgroundColor: darkMode ? "#1F2937" : "#FFFFFF",
                           borderColor: darkMode ? "#374151" : "#E5E7EB",
-                          color: darkMode ? "#F9FAFB" : "#111827"
+                          color: darkMode ? "#F9FAFB" : "#111827",
                         }}
                       />
                       <Legend />
@@ -506,9 +622,15 @@ const WaterDashboard = () => {
                         fill="url(#blue-gradient-bar)"
                         radius={[4, 4, 0, 0]}
                       />
-                      
+
                       <defs>
-                        <linearGradient id="blue-gradient-bar" x1="0" y1="0" x2="0" y2="1">
+                        <linearGradient
+                          id="blue-gradient-bar"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
                           <stop offset="0%" stopColor="#3B82F6" />
                           <stop offset="100%" stopColor="#10B981" />
                         </linearGradient>

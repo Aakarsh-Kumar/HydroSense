@@ -20,7 +20,9 @@ class SmartWaterManagement:
             df = df[~df.index.duplicated(keep='last')].sort_index()
             df["water_usage"].fillna(method="ffill", inplace=True)
             df["water_usage"].fillna(df["water_usage"].mean(), inplace=True)
-        return df
+            return df
+        else:
+            raise FileNotFoundError(f"CSV file not found: {self.csv_path}")
 
     def train_models(self):
         cleaned_data = self.df.dropna()
@@ -52,22 +54,64 @@ class SmartWaterManagement:
             expected_usage = round(self.df["water_usage"].mean(), 2)
         
         average_usage = self.df["water_usage"].mean()
-        threshold = average_usage * 1.5  
+        std_usage = self.df["water_usage"].std()
+        
+        # Use Isolation Forest to detect anomalies (returns -1 for anomaly, 1 for normal)
+        is_anomaly = self.iso_forest.predict([[live_flow_rate]])[0]
+        # Get anomaly score (negative values indicate anomalies)
         anomaly_score = self.iso_forest.decision_function([[live_flow_rate]])[0]
         
-        if live_flow_rate > average_usage:
-            leak_status = "Potential Leak" if live_flow_rate < threshold else "Leak Detected"
-            overuse_factor = min(1, (live_flow_rate - average_usage) / (threshold - average_usage))
-            leak_probability = round(overuse_factor * 100, 2)
+        # Calculate how much lower the flow is than expected
+        # Positive value means flow is lower than expected (potential leak)
+        flow_deficit = expected_usage - live_flow_rate
+        deficit_percentage = (flow_deficit / expected_usage * 100) if expected_usage > 0 else 0
+        
+        # Leak detection logic: If pump is on but flow is lower than expected, there's a leak
+        auto_shutdown = False  # Flag for emergency shutdown
+        
+        if live_flow_rate < expected_usage * 0.7:  # Flow is less than 70% of expected
+            # Significant drop in flow - likely leak
+            if live_flow_rate < expected_usage * 0.3:  # Less than 30% of expected
+                leak_status = "Critical Leak Detected"
+                leak_probability = round(min(100, 70 + deficit_percentage), 2)
+                auto_shutdown = True  # Critical leak - auto shutdown
+            elif live_flow_rate < expected_usage * 0.5:  # Less than 50% of expected
+                leak_status = "Leak Detected"
+                leak_probability = round(min(100, 50 + deficit_percentage), 2)
+                auto_shutdown = True  # Confirmed leak - auto shutdown
+            else:  # Between 50-70% of expected
+                leak_status = "Possible Leak"
+                leak_probability = round(min(100, max(30, deficit_percentage)), 2)
+        
+        elif is_anomaly == -1:
+            # Anomaly detected by ML model
+            if live_flow_rate > expected_usage * 1.3:
+                leak_status = "Abnormal High Flow"
+                leak_probability = round(min(100, abs(anomaly_score) * 150), 2)
+                auto_shutdown = True  # Abnormal high flow - auto shutdown
+            else:
+                leak_status = "Anomaly Detected"
+                leak_probability = round(min(100, abs(anomaly_score) * 150), 2)
+        
+        elif abs(deficit_percentage) > 20:
+            # Flow is within normal range but deviates more than 20%
+            leak_status = "Monitor Closely"
+            leak_probability = round(min(100, abs(deficit_percentage)), 2)
+        
         else:
+            # Everything looks normal
             leak_status = "Normal"
-            leak_probability = round(max(0, min(100, anomaly_score * 100)), 2)
+            leak_probability = round(abs(deficit_percentage) / 2, 2)
         
         return {
             "live_flow_rate": live_flow_rate,
             "expected_usage": expected_usage,
             "leak_status": leak_status,
             "leak_probability": leak_probability,
+            "anomaly_score": round(anomaly_score, 4),
+            "flow_deficit": round(flow_deficit, 2),
+            "deficit_percentage": round(deficit_percentage, 2),
+            "auto_shutdown": auto_shutdown
         }
     
     def predict_weekly_usage(self):
